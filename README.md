@@ -20,108 +20,120 @@
 **TAPIP3D** is a method for long-term **feed-forward** 3D point tracking in monocular RGB and RGB-D video sequences. It introduces a 3D feature cloud representation that lifts image features into a persistent world coordinate space, canceling out camera motion and enabling accurate trajectory estimation across frames.
 
 ## Installation
-### Installing dependencies
 
-1. Prepare the environment
-```bash
-conda create -n tapip3d python=3.10
-conda activate tapip3d
+### Install from source
 
-pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 "xformers>=0.0.27" --index-url https://download.pytorch.org/whl/cu124
-pip install torch-scatter -f https://data.pyg.org/whl/torch-2.4.1+cu124.html
-pip install -r requirements.txt
-```
-
-2. Compile pointops2
+You can install the package directly from source:
 
 ```bash
-cd third_party/pointops2
-LIBRARY_PATH=$CONDA_PREFIX/lib:$LIBRARY_PATH python setup.py install
-cd ../..
+git clone https://github.com/tapip3d/tapip3d.git
+cd tapip3d
+pip install -e .
 ```
 
-3. Compile megasam
-```bash
-cd third_party/megasam/base
-LIBRARY_PATH=$CONDA_PREFIX/lib:$LIBRARY_PATH python setup.py install
-cd ../../..
-```
+### Install in development mode
 
-### Downloading checkpoints
-
-Download our TAPIP3D model checkpoint [here](https://huggingface.co/zbww/tapip3d/resolve/main/tapip3d_final.pth) to `checkpoints/tapip3d_final.pth`
-
-If you want to run TAPIP3D on monocular videos, you need to prepare the following checkpoints manually to run MegaSAM:
-
-1. Download the DepthAnything V1 checkpoint from [here](https://huggingface.co/spaces/LiheYoung/Depth-Anything/resolve/main/checkpoints/depth_anything_vitl14.pth) and put it to `third_party/megasam/Depth-Anything/checkpoints/depth_anything_vitl14.pth`
-
-2. Download the RAFT checkpoint from [here](https://drive.google.com/drive/folders/1sWDsfuZ3Up38EUQt7-JDTT1HcGHuJgvT) and put it to `third_party/megasam/cvd_opt/raft-things.pth`
-
-Additionally, the checkpoints of [MoGe](https://wangrc.site/MoGePage/) and [UniDepth](https://github.com/lpiccinelli-eth/UniDepth.git) will be downloaded automatically when running the demo. Please make sure your network connection is available.
-
-## Demo Usage
-
-We provide a simple demo script `inference.py`, along with sample input data located in the `demo_inputs/` directory.
-
-The script accepts as input either an `.mp4` video file or an `.npz` file. If providing an `.npz` file, it should follow the following format:
-
-- `video`: array of shape (T, H, W, 3), dtype: uint8
-- `depths` (optional): array of shape (T, H, W), dtype: float32
-- `intrinsics` (optional): array of shape (T, 3, 3), dtype: float32
-- `extrinsics` (optional): array of shape (T, 4, 4), dtype: float32
-
-For demonstration purposes, the script uses a 32x32 grid of points at the first frame as queries.
-
-
-### Inference with Monocular Video
-
-By providing an video as `--input_path`, the script first runs [MegaSAM](https://github.com/mega-sam/mega-sam) with [MoGe](https://wangrc.site/MoGePage/) to estimate depth maps and camera parameters. Subsequently, the model will process these inputs within the global frame.
-
-**Demo 1**
-
-<img src="./media/demo1.gif" width="100%" alt="Demo 1">
-
-To run inference:
+For development, install with optional dependencies:
 
 ```bash
-python inference.py --input_path demo_inputs/sheep.mp4 --checkpoint checkpoints/tapip3d_final.pth --resolution_factor 2
+pip install -e ".[dev]"
 ```
 
-An npz file will be saved to `outputs/inference/`. To visualize the results:
+## Usage
+
+### As a Package
+
+After installation, you can use TAPIP3D in your Python code:
+
+```python
+import tapip3d
+
+# Run inference on a video file
+result_path = tapip3d.run_inference(
+    input_path="path/to/your/video.mp4",
+    checkpoint="path/to/checkpoint.pth",
+    output_dir="outputs/my_results",
+    device="cuda",
+    num_iters=6,
+    resolution_factor=2
+)
+
+print(f"Results saved to: {result_path}")
+
+# Visualize the results
+tapip3d.visualize(result_path, open_browser=True)
+```
+
+### Command Line Interface
+
+The package also provides command-line tools:
 
 ```bash
-python visualize.py <result_npz_path>
+# Run inference
+tapip3d-inference path/to/video.mp4 --checkpoint path/to/checkpoint.pth --output_dir outputs
+
+# Visualize results
+tapip3d-visualize path/to/results.npz --port 8080
 ```
 
-**Demo 2**
+### Function Parameters
 
-<img src="./media/demo2.gif" width="100%" alt="Demo 2">
+#### `run_inference` Function
 
-```bash
-python inference.py --input_path demo_inputs/pstudio.mp4 --checkpoint checkpoints/tapip3d_final.pth --resolution_factor 2
-```
+The `run_inference` function accepts the following parameters:
 
-**Inference with Known Depths and Camera Parameters**
+- `input_path` (str): Path to input video (.mp4, .avi, .mov, .webm) or npz file
+- `output_dir` (str, optional): Directory to save results (default: "outputs/inference")
+- `checkpoint` (str, optional): Path to model checkpoint
+- `device` (str, optional): Device to run inference on (default: "cuda")
+- `num_iters` (int, optional): Number of iterations for inference (default: 6)
+- `support_grid_size` (int, optional): Grid size for support points (default: 16)
+- `num_threads` (int, optional): Number of threads for parallel processing (default: 8)
+- `resolution_factor` (int, optional): Resolution scaling factor (default: 2)
+- `vis_threshold` (float, optional): Visibility threshold (default: 0.9)
+- `depth_model` (str, optional): Depth model to use if depths are not provided (default: "moge")
 
-If an `.npz` file containing all four keys (`rgb`, `depths`, `intrinsics`, `extrinsics`) is provided, the model will operate in an aligned global frame, generating point trajectories in world coordinates.
-We provide one example `.npz` file at [here](https://huggingface.co/zbww/tapip3d/resolve/main/demo_inputs/dexycb.npz?download=true) and please put it in the `demo_inputs/` directory.
+#### `visualize` Function
 
-**Demo 3**
+The `visualize` function accepts the following parameters:
 
-<img src="./media/demo3.gif" width="100%" alt="Demo 3">
+- `npz_file` (str or Path): Path to the input .result.npz file
+- `width` (int, optional): Target width for visualization (default: 256)
+- `height` (int, optional): Target height for visualization (default: 192)
+- `fps` (int, optional): Base frame rate for playback (default: 4)
+- `port` (int, optional): Port to serve on (default: random available port)
+- `open_browser` (bool, optional): Whether to automatically open browser (default: True)
+- `block` (bool, optional): Whether to block until server is stopped (default: True)
 
-```bash
-python inference.py --input_path demo_inputs/dexycb.npz --checkpoint checkpoints/tapip3d_final.pth --resolution_factor 2
-```
+### Supported Input Formats
+
+- Video files: `.mp4`, `.avi`, `.mov`, `.webm`
+- NPZ files with pre-computed depths and camera parameters
+
+### Output
+
+The function returns a `Path` object pointing to the saved results NPZ file containing:
+- `video`: Original video frames
+- `depths`: Depth maps
+- `intrinsics`: Camera intrinsic parameters
+- `extrinsics`: Camera extrinsic parameters
+- `coords`: Tracked 3D coordinates
+- `visibs`: Visibility information
+- `query_points`: Query points used for tracking
+
+## License
+
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
 
 ## Citation
-If you find this project useful, please consider citing:
 
-```
-@article{tapip3d,
-  title={TAPIP3D: Tracking Any Point in Persistent 3D Geometry},
-  author={Zhang, Bowei and Ke, Lei and Harley, Adam W and Fragkiadaki, Katerina},
-  journal={arXiv preprint arXiv:2504.14717},
-  year={2025}
+If you use this code in your research, please cite:
+
+```bibtex
+@misc{tapip3d,
+  title={TAPIP3D: 3D Point Tracking and Inference},
+  author={TAPIP3D Team},
+  url={https://tapip3d.github.io/},
+  year={2024}
 }
 ```
