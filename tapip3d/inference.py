@@ -1,5 +1,7 @@
 # Copyright (c) TAPIP3D team(https://tapip3d.github.io/)
 
+import os
+import sys
 from concurrent.futures import ThreadPoolExecutor
 import shlex
 import tap
@@ -24,8 +26,13 @@ from .utils.inference_utils import (
 
 logger = logging.getLogger(__name__)
 
+
 DEFAULT_QUERY_GRID_SIZE = 32
-DEFAULT_CHECKPOINT_PATH = "/scratch/repos/TAPIP3D/tapip3d/checkpoints/tapip3d_final.pth"
+DEFAULT_CHECKPOINT_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "checkpoints",
+    "tapip3d_final.pth",
+)
 
 
 class Arguments(tap.Tap):
@@ -292,4 +299,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

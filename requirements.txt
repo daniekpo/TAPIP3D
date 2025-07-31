@@ -10,7 +10,7 @@ kornia
 sophuspy
 opencv-python
 rerun-sdk~=0.21
-numpy<2
+numpy
 matplotlib
 imageio
 trimesh
