@@ -161,7 +161,7 @@ def prepare_inputs(
 
 def run_inference(
     input_path: str,
-    output_dir: str = "outputs/inference",
+    output_path: str = "outputs/inference",
     checkpoint: Optional[str] = None,
     device: str = "cuda",
     num_iters: int = 6,
@@ -170,6 +170,8 @@ def run_inference(
     resolution_factor: int = 2,
     vis_threshold: Optional[float] = 0.9,
     depth_model: str = "moge",
+    model=None,
+    verbose=True
 ) -> Path:
     """
     Run inference on a video or npz file and save results.
@@ -185,6 +187,7 @@ def run_inference(
         resolution_factor: Resolution scaling factor (default: 2)
         vis_threshold: Visibility threshold (default: 0.9)
         depth_model: Depth model to use if depths are not provided (default: "moge")
+        model: for reusing the same model if running this in a loop. At first the model is None, but after the first call the model is returned
 
     Returns:
         Path to the saved results npz file
@@ -195,10 +198,6 @@ def run_inference(
     """
     setup_logger()
 
-    # Create output directory with timestamp
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     # Load model
     if checkpoint is None:
         checkpoint = DEFAULT_CHECKPOINT_PATH
@@ -207,8 +206,9 @@ def run_inference(
             "No checkpoint provided and no default checkpoint set. Please provide a checkpoint path."
         )
 
-    model = load_model(checkpoint)
-    model.to(device)
+    if model is None:
+        model = load_model(checkpoint)
+        model.to(device)
 
     inference_res = (
         int(model.image_size[0] * np.sqrt(resolution_factor)),
@@ -250,7 +250,11 @@ def run_inference(
     visibs = visibs.cpu().numpy()
     query_point = query_point.cpu().numpy()
 
-    npz_path = Path(output_dir / Path(input_path).name).with_suffix(".result.npz")
+    if  Path(output_path).suffix:
+        npz_path = Path(output_path)
+    else:
+        npz_path = Path(output_path / Path(input_path).stem).with_suffix(".result.npz")
+
     npz_path.parent.mkdir(exist_ok=True, parents=True)
     np.savez(
         npz_path,
@@ -263,11 +267,17 @@ def run_inference(
         query_points=query_point,
     )
 
-    logger.info(
-        f"Results saved to {npz_path.resolve()}.\nTo visualize them, run: `[bold yellow]python -m tapip3d.visualize {shlex.quote(str(npz_path.resolve()))}[/bold yellow]`"
-    )
+    if verbose:
+        logger.info(
+            f"Results saved to {npz_path.resolve()}.\nTo visualize them, run: `[bold yellow]python -m tapip3d.visualize {shlex.quote(str(npz_path.resolve()))}[/bold yellow]`"
+        )
 
-    return npz_path
+    # clear GPU memory
+    del video, depths, intrinsics, extrinsics, query_point, coords, visibs
+    torch.cuda.empty_cache()
+    torch.cuda.ipc_collect()
+
+    return npz_path, model
 
 
 def main():
@@ -276,7 +286,7 @@ def main():
 
     result_path = run_inference(
         input_path=args.input_path,
-        output_dir=args.output_dir,
+        output_path=args.output_dir,
         checkpoint=args.checkpoint,
         device=args.device,
         num_iters=args.num_iters,

@@ -130,7 +130,7 @@ def inference(
     )
 
     T, C, H, W = video.shape
-    assert depths.shape == (T, H, W)
+    assert depths.shape == (T, H, W), f"Expected depths shape {(T, H, W)}, got {depths.shape}"
     N = query_point.shape[0]
 
     model.set_image_size((H, W))
